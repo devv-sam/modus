@@ -1,0 +1,18 @@
+# Modus — persistent Discord bot. Copy to /etc/systemd/system/modus.service.
+# Edit User and WorkingDirectory to match where you cloned the repo.
+[Unit]
+Description=Modus (internship/hackathon Discord bot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=modus
+WorkingDirectory=/opt/modus
+EnvironmentFile=/etc/modus.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+{
+  "name": "modus",
+  "version": "0.1.0",
+  "description": "Watches internship and hackathon sources and posts new drops to a private Discord channel with Apply / Skip / More buttons. Runs as a persistent bot on your own VPS. Open source, self-hosted.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}
