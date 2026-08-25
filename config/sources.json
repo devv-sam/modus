@@ -1,0 +1,29 @@
+{
+  "discordToken": "",
+  "discordChannelId": "",
+  "scanIntervalMinutes": 15,
+  "filter": {
+    "include": ["intern", "internship", "co-op", "new grad"],
+    "exclude": ["senior", "staff", "principal", "manager", "phd"]
+  },
+  "sources": [
+    {
+      "kind": "github-list",
+      "name": "SimplifyJobs Summer Internships",
+      "jsonUrl": "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/.github/scripts/listings.json",
+      "fields": {
+        "id": "id", "company": "company_name", "title": "title", "url": "url",
+        "location": "locations", "postedAt": "date_posted", "active": "active"
+      }
+    },
+    {
+      "kind": "github-list",
+      "name": "vanshb03 Internships",
+      "jsonUrl": "https://raw.githubusercontent.com/vanshb03/Summer2026-Internships/dev/.github/scripts/listings.json",
+      "fields": {
+        "id": "id", "company": "company_name", "title": "title", "url": "url",
+        "location": "locations", "postedAt": "date_posted", "active": "active"
+      }
+    }
+  ]
+}
