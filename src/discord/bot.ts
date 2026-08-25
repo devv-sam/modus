@@ -7,16 +7,16 @@ import {
   ChannelType,
   type TextChannel,
   type DMChannel,
-  type Interaction,
   type Message,
 } from "discord.js";
+import { existsSync, readFileSync } from "node:fs";
 import type { Opportunity } from "../types.js";
 import { respond } from "../ai/respond.js";
+import { Onboarding, PROFILE_PATH } from "./onboarding.js";
 
 export interface AIConfig {
   apiKey: string;
   model: string;
-  profile: string;
 }
 
 export class DiscordBot {
@@ -26,14 +26,18 @@ export class DiscordBot {
   // keyed by opp id so DM triage can resolve the full record
   private readonly posted = new Map<string, Opportunity>();
   private readonly ai: AIConfig | null;
+  private profile: string;
+  private onboarding: Onboarding | null = null;
 
   constructor(
     private readonly token: string,
     private readonly channelId: string,
     private readonly userId: string,
     ai: AIConfig | null,
+    profile: string,
   ) {
     this.ai = ai;
+    this.profile = profile;
     this.client = new Client({
       intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
       partials: [Partials.Channel, Partials.Message],
@@ -54,11 +58,16 @@ export class DiscordBot {
     }
     this.channel = ch as TextChannel;
 
-    // open DM channel with the user up front so first notify is instant
     const user = await this.client.users.fetch(this.userId);
     this.dmChannel = await user.createDM();
 
     console.log(`Discord bot ready as ${this.client.user?.tag}.`);
+
+    // kick off onboarding if no profile exists yet
+    if (!this.profile) {
+      this.onboarding = new Onboarding();
+      await this.dmChannel.send(this.onboarding.intro());
+    }
   }
 
   async postOpportunity(opp: Opportunity): Promise<void> {
@@ -77,7 +86,6 @@ export class DiscordBot {
     await this.channel.send(text.slice(0, 2000));
   }
 
-  /** DM the user after a scan with new drops. */
   async notifyUser(freshCount: number): Promise<void> {
     if (!this.dmChannel) return;
     await this.dmChannel.send(
@@ -90,13 +98,25 @@ export class DiscordBot {
     if (message.channel.type !== ChannelType.DM) return;
     if (message.author.id !== this.userId) return;
 
+    // onboarding takes priority over normal chat
+    if (this.onboarding?.active) {
+      const { reply, done } = this.onboarding.next(message.content);
+      await message.reply(reply);
+      if (done) {
+        // reload profile from the file the onboarding just wrote
+        this.profile = existsSync(PROFILE_PATH) ? readFileSync(PROFILE_PATH, "utf8") : "";
+        this.onboarding = null;
+      }
+      return;
+    }
+
     if (!this.ai?.apiKey) {
-      await message.reply("no claude api key configured — set CLAUDE_API_KEY on the vps to enable chat.");
+      await message.reply("no claude api key configured — set CLAUDE_API_KEY in /etc/modus.env to enable chat.");
       return;
     }
 
     try {
-      const reply = await respond(message.content, this.posted, this.ai.profile, this.ai.apiKey, this.ai.model);
+      const reply = await respond(message.content, this.posted, this.profile, this.ai.apiKey, this.ai.model);
       await message.reply(reply.slice(0, 2000));
     } catch (err) {
       console.error(`DM handler failed: ${(err as Error).message}`);

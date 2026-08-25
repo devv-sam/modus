@@ -63,8 +63,8 @@ async function main(): Promise<void> {
   const profile = loadProfile();
   if (!profile) console.warn("No config/profile.md found — AI scoring and chat will have no candidate context.");
 
-  const ai = cfg.claudeApiKey ? { apiKey: cfg.claudeApiKey, model: cfg.claudeModel, profile } : null;
-  const bot = new DiscordBot(cfg.discordToken, cfg.discordChannelId, cfg.discordUserId, ai);
+  const ai = cfg.claudeApiKey ? { apiKey: cfg.claudeApiKey, model: cfg.claudeModel } : null;
+  const bot = new DiscordBot(cfg.discordToken, cfg.discordChannelId, cfg.discordUserId, ai, profile);
   await bot.start();
 
   const intervalMs = cfg.scanIntervalMinutes * 60_000;
