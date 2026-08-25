@@ -6,7 +6,7 @@ import { DiscordBot } from "./discord/bot.js";
 import { queueApply, skip, recordInterest } from "./triage.js";
 import type { Opportunity } from "./types.js";
 
-/** Above this many fresh drops in one scan, post a summary instead of a wall of cards. */
+// above this many fresh drops, post a summary instead of individual cards
 const MAX_INDIVIDUAL_POSTS = 10;
 
 async function scanOnce(bot: DiscordBot, cfg: ReturnType<typeof loadConfig>): Promise<void> {

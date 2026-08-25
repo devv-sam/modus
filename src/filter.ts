@@ -1,6 +1,5 @@
 import type { Filter, Opportunity } from "./types.js";
 
-/** Keep opportunities matching an include term (or all, if none) and dropping any exclude term. */
 export function applyFilter(opps: Opportunity[], filter: Filter): Opportunity[] {
   const inc = filter.include.map((s) => s.toLowerCase());
   const exc = filter.exclude.map((s) => s.toLowerCase());

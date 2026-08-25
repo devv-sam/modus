@@ -27,7 +27,6 @@ export function loadSeen(): Set<string> {
   }
 }
 
-/** Split incoming opportunities into never-seen vs already-seen, deduping within this batch too. */
 export function diff(all: Opportunity[], seen: Set<string>): DedupeResult {
   const firstRun = seen.size === 0;
   const fresh: Opportunity[] = [];
@@ -40,7 +39,6 @@ export function diff(all: Opportunity[], seen: Set<string>): DedupeResult {
   return { fresh, firstRun, seenCount: seen.size };
 }
 
-/** Persist the union of previously-seen ids and everything scanned this run. */
 export function saveSeen(seen: Set<string>, all: Opportunity[]): void {
   const merged = new Set(seen);
   for (const opp of all) merged.add(opp.id);
