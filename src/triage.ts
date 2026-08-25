@@ -1,12 +1,12 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import type { Opportunity } from "./types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const dataDir = resolve(here, "..", "data");
-const QUEUE_PATH = resolve(dataDir, "queue.json");
-const INTERESTS_PATH = resolve(dataDir, "interests.json");
+const DATA_DIR = resolve(here, "..", "data");
+const QUEUE_PATH = resolve(DATA_DIR, "queue.json");
+const INTERESTS_PATH = resolve(DATA_DIR, "interests.json");
 
 function readList(path: string): Opportunity[] {
   if (!existsSync(path)) return [];
@@ -18,26 +18,22 @@ function readList(path: string): Opportunity[] {
 }
 
 function writeList(path: string, items: Opportunity[]): void {
+  mkdirSync(DATA_DIR, { recursive: true });
   writeFileSync(path, JSON.stringify(items, null, 2) + "\n", "utf8");
 }
 
-export function queueApply(opp: Opportunity): string {
+export function queueApply(opp: Opportunity): void {
   const queue = readList(QUEUE_PATH);
-  if (queue.some((q) => q.id === opp.id)) return `Already queued: ${opp.company} — ${opp.title}`;
-  queue.push(opp);
-  writeList(QUEUE_PATH, queue);
-  return `Queued for apply: ${opp.company} — ${opp.title}`;
+  if (!queue.some((q) => q.id === opp.id)) {
+    queue.push(opp);
+    writeList(QUEUE_PATH, queue);
+  }
 }
 
-export function skip(opp: Opportunity): string {
-  return `Skipped: ${opp.company} — ${opp.title}`;
-}
-
-export function recordInterest(opp: Opportunity): string {
+export function recordInterest(opp: Opportunity): void {
   const interests = readList(INTERESTS_PATH);
   if (!interests.some((i) => i.id === opp.id)) {
     interests.push(opp);
     writeList(INTERESTS_PATH, interests);
   }
-  return `Noted. I'll favour more like ${opp.company} — ${opp.title}`;
 }

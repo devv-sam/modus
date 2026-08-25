@@ -1,10 +1,11 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import type { Opportunity } from "./types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SEEN_PATH = resolve(here, "..", "data", "seen.json");
+const DATA_DIR = resolve(here, "..", "data");
+const SEEN_PATH = resolve(DATA_DIR, "seen.json");
 
 interface SeenState {
   ids: string[];
@@ -40,6 +41,7 @@ export function diff(all: Opportunity[], seen: Set<string>): DedupeResult {
 }
 
 export function saveSeen(seen: Set<string>, all: Opportunity[]): void {
+  mkdirSync(DATA_DIR, { recursive: true });
   const merged = new Set(seen);
   for (const opp of all) merged.add(opp.id);
   const state: SeenState = { ids: [...merged].sort(), updatedAt: new Date().toISOString() };

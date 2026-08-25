@@ -2,7 +2,8 @@ node_modules/
 dist/
 *.log
 .DS_Store
-# runtime state (lives on the VPS disk, not in git)
+# runtime state and personal config (live on the VPS disk, not in git)
 data/seen.json
 data/queue.json
 data/interests.json
+config/profile.md
