@@ -1,38 +1,37 @@
-# Modus
+# modus
 
-Modus watches internship and hackathon sources and pushes new drops to your phone the moment they appear. Open source, bring-your-own everything, no always-on hardware.
+watches internship and hackathon feeds and posts new drops to a private Discord channel with **Apply / Skip / More like this** buttons. self-hosted, no always-on hardware beyond a $6 VPS.
 
-v1 is a one-way alerter: it scans, dedupes, and pushes. You decide what to do with each ping. No auto-apply, by design.
+## setup
 
-## How it runs
+1. [Discord Developer Portal](https://discord.com/developers/applications) → New Application → Bot → copy the token. under OAuth2 → URL Generator, select `bot` + Send Messages + Embed Links + View Channels, invite it to a private server.
+2. In Discord (Developer Mode on): right-click your drops channel → Copy Channel ID.
+3. On a fresh Ubuntu VPS:
+   ```bash
+   git clone https://github.com/devv-sam/modus /opt/modus
+   cd /opt/modus
+   ./deploy/setup-vps.sh https://github.com/devv-sam/modus.git <token> <channel-id>
+   ```
+   Then: `journalctl -u modus.service -f` — confirm "modus is live" lands in the channel.
 
-A GitHub Actions cron job runs Modus every 15 minutes in the cloud. No server, no Raspberry Pi, no Mac. Fork the repo, set two things, done. Notifications arrive via [ntfy](https://ntfy.sh) as real push notifications, no account required.
+## configure
 
-## Setup (about 3 minutes)
+edit `config/sources.json`:
+- `filter.include` / `filter.exclude` — substrings matched against title and company (case-insensitive).
+- `scanIntervalMinutes` — how often to scan (default 15).
+- `sources` — add any GitHub internship list that publishes a `listings.json`.
 
-1. **Fork this repo** (keep it public so scheduled Actions stay free and unlimited).
-2. **Pick an ntfy topic.** Any hard-to-guess string, e.g. `modus-a7f3k9`. Install the ntfy app (iOS/Android) and subscribe to that topic.
-3. **Add the topic as a repo secret:** Settings → Secrets and variables → Actions → New repository secret → name `NTFY_TOPIC`, value your topic.
-4. **Enable Actions** on the Actions tab, then run the `modus scan` workflow once via "Run workflow". The first run seeds state and sends a single "Modus is live" confirmation.
-
-## Configure what you watch
-
-Edit `config/sources.json`:
-- `filter.include` / `filter.exclude` — case-insensitive substrings matched against `title` and `company`.
-- `sources` — each is a machine-readable listings feed plus a field map. Add any GitHub internship list that publishes a `listings.json`.
-
-## Local run
+## local run
 
 ```bash
-npm install
-npm run build
-NTFY_TOPIC=your-topic npm start
+npm install && npm run build
+DISCORD_TOKEN=... DISCORD_CHANNEL_ID=... npm start
 ```
 
-## Roadmap (not in v1)
+## roadmap
 
-- Two-way triage (Telegram bot with Apply / Skip buttons)
-- Apply handoff to [career-ops](https://github.com/santifer/career-ops): queue a role, tailor a CV locally, human submits
-- More source kinds (Devpost/MLH hackathons, Greenhouse/Ashby/Lever boards)
+- apply handoff to career-ops: queue → tailor CV → human submits
+- more sources (Devpost/MLH, Greenhouse/Ashby/Lever)
+- natural-language triage
 
 MIT.

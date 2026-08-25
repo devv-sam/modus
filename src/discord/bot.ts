@@ -12,23 +12,16 @@ import {
 } from "discord.js";
 import type { Opportunity, TriageAction } from "../types.js";
 
-/** Handlers the bot calls when a triage button is pressed. Each returns the line to reply. */
 export interface TriageHandlers {
   apply(opp: Opportunity): string;
   skip(opp: Opportunity): string;
   more(opp: Opportunity): string;
 }
 
-/**
- * The persistent Discord channel. Holds one gateway connection for the whole process:
- * posts drops with buttons, and receives button presses over the same connection
- * (no public URL, no webhook). Button clicks are INTERACTION_CREATE events, which do
- * NOT require the privileged Message Content intent — only Guilds.
- */
 export class DiscordBot {
   private readonly client: Client;
   private channel: TextChannel | null = null;
-  /** Opportunities posted this session, so a button press can resolve its full record. */
+  // keyed by opp id so button presses can resolve the full record
   private readonly posted = new Map<string, Opportunity>();
 
   constructor(
@@ -40,7 +33,6 @@ export class DiscordBot {
     this.client.on(Events.InteractionCreate, (i) => void this.onInteraction(i));
   }
 
-  /** Log in and resolve the target channel. Rejects if the channel isn't a text channel. */
   async start(): Promise<void> {
     await new Promise<void>((res, rej) => {
       this.client.once(Events.ClientReady, () => res());
@@ -65,7 +57,6 @@ export class DiscordBot {
     );
   }
 
-  /** Post one opportunity with an embed and the triage buttons. */
   async postOpportunity(opp: Opportunity): Promise<void> {
     if (!this.channel) throw new Error("Bot not started.");
     this.posted.set(opp.id, opp);
@@ -77,7 +68,6 @@ export class DiscordBot {
     await this.channel.send({ embeds: [embed], components: [this.buttons(opp.id)] });
   }
 
-  /** Post a plain roll-up message (cold start, or when a scan finds too many drops to list). */
   async postSummary(text: string): Promise<void> {
     if (!this.channel) throw new Error("Bot not started.");
     await this.channel.send(text.slice(0, 2000));
@@ -99,7 +89,7 @@ export class DiscordBot {
     else if (action === "skip") reply = this.handlers.skip(opp);
     else reply = this.handlers.more(opp);
 
-    // Ack, then disable the buttons on the original message so a decision is final and visible.
+    // disable buttons so the decision is visible and final
     await interaction.update({ components: [] });
     await interaction.followUp({ content: reply, flags: MessageFlags.Ephemeral });
   }
