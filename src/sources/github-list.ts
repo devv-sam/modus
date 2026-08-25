@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import type { GitHubListSource, Opportunity } from "../types.js";
 
-/** Read a path like "company" or "url" from a listing object, tolerating missing keys. */
 function pick(row: Record<string, unknown>, key: string | undefined): string | undefined {
   if (!key) return undefined;
   const v = row[key];
@@ -9,7 +8,6 @@ function pick(row: Record<string, unknown>, key: string | undefined): string | u
   return String(v);
 }
 
-/** True unless the mapped `active` field clearly says the listing is closed. */
 function isActive(row: Record<string, unknown>, activeKey?: string): boolean {
   if (!activeKey) return true;
   const v = row[activeKey];
@@ -23,10 +21,7 @@ function stableId(source: string, company: string, title: string, url: string): 
   return createHash("sha1").update(`${source}|${company}|${title}|${url}`).digest("hex").slice(0, 16);
 }
 
-/**
- * Fetch a listings JSON feed and map it to Opportunities.
- * The feed may be a bare array, or an object with an array under `listings` / `data` / `jobs`.
- */
+// feed may be a bare array or nested under listings / data / jobs
 export async function fetchGitHubList(source: GitHubListSource): Promise<Opportunity[]> {
   const res = await fetch(source.jsonUrl, { headers: { "User-Agent": "modus-scanner" } });
   if (!res.ok) {

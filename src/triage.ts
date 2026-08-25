@@ -21,11 +21,6 @@ function writeList(path: string, items: Opportunity[]): void {
   writeFileSync(path, JSON.stringify(items, null, 2) + "\n", "utf8");
 }
 
-/**
- * Apply: queue the role for the (later) career-ops handoff. v1 just records it;
- * invoking career-ops happens laptop-side and is out of scope here.
- * Returns the short line to reply in Discord.
- */
 export function queueApply(opp: Opportunity): string {
   const queue = readList(QUEUE_PATH);
   if (queue.some((q) => q.id === opp.id)) return `Already queued: ${opp.company} — ${opp.title}`;
@@ -34,12 +29,10 @@ export function queueApply(opp: Opportunity): string {
   return `Queued for apply: ${opp.company} — ${opp.title}`;
 }
 
-/** Skip: nothing to persist (the role is already in seen.json so it won't re-alert). */
 export function skip(opp: Opportunity): string {
   return `Skipped: ${opp.company} — ${opp.title}`;
 }
 
-/** More like this: record a positive signal for future filter/ranking tuning. */
 export function recordInterest(opp: Opportunity): string {
   const interests = readList(INTERESTS_PATH);
   if (!interests.some((i) => i.id === opp.id)) {

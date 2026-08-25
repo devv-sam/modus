@@ -5,7 +5,6 @@ import type { Config } from "./types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-/** Load config/sources.json and apply env overrides. Secrets come from env, never the committed file. */
 export function loadConfig(): Config {
   const path = resolve(here, "..", "config", "sources.json");
   let raw: Partial<Config>;
