@@ -16,22 +16,33 @@ export function loadConfig(): Config {
 
   const discordToken = process.env.DISCORD_TOKEN ?? raw.discordToken ?? "";
   const discordChannelId = process.env.DISCORD_CHANNEL_ID ?? raw.discordChannelId ?? "";
+  const discordUserId = process.env.DISCORD_USER_ID ?? raw.discordUserId ?? "";
   if (!discordToken) throw new Error("No Discord token. Set DISCORD_TOKEN env var.");
   if (!discordChannelId) throw new Error("No channel id. Set DISCORD_CHANNEL_ID env var.");
+  if (!discordUserId) throw new Error("No Discord user id. Set DISCORD_USER_ID env var.");
   if (!Array.isArray(raw.sources) || raw.sources.length === 0) {
     throw new Error("config/sources.json has no sources.");
   }
 
-  const interval = Number(process.env.SCAN_INTERVAL_MINUTES ?? raw.scanIntervalMinutes ?? 15);
-
   return {
     discordToken,
     discordChannelId,
-    scanIntervalMinutes: Math.max(1, interval),
-    filter: {
-      include: raw.filter?.include ?? [],
-      exclude: raw.filter?.exclude ?? [],
-    },
+    discordUserId,
+    scanIntervalMinutes: Math.max(1, Number(process.env.SCAN_INTERVAL_MINUTES ?? raw.scanIntervalMinutes ?? 15)),
+    filter: { include: raw.filter?.include ?? [], exclude: raw.filter?.exclude ?? [] },
     sources: raw.sources,
+    claudeApiKey: process.env.CLAUDE_API_KEY ?? raw.claudeApiKey ?? "",
+    claudeModel: process.env.CLAUDE_MODEL ?? raw.claudeModel ?? "claude-haiku-4-5-20251001",
+    scoreThreshold: Number(process.env.SCORE_THRESHOLD ?? raw.scoreThreshold ?? 3),
   };
+}
+
+/** Load profile markdown from config/profile.md. Returns empty string if not found. */
+export function loadProfile(): string {
+  const path = resolve(dirname(fileURLToPath(import.meta.url)), "..", "config", "profile.md");
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return "";
+  }
 }

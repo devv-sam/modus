@@ -34,11 +34,15 @@ export interface Filter {
 }
 
 export interface Config {
-  discordToken: string;    // overridden by DISCORD_TOKEN env var
-  discordChannelId: string; // overridden by DISCORD_CHANNEL_ID env var
+  discordToken: string;      // overridden by DISCORD_TOKEN env var
+  discordChannelId: string;  // overridden by DISCORD_CHANNEL_ID env var
+  discordUserId: string;     // overridden by DISCORD_USER_ID env var — your own id for DMs
   scanIntervalMinutes: number;
   filter: Filter;
   sources: Source[];
+  claudeApiKey: string;      // overridden by CLAUDE_API_KEY env var
+  claudeModel: string;       // overridden by CLAUDE_MODEL env var
+  scoreThreshold: number;    // min score (1-5) to post a drop, default 3
 }
 
 // encoded into button custom ids as <action>:<opportunityId>
