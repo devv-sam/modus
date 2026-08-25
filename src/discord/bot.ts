@@ -2,35 +2,43 @@ import {
   Client,
   GatewayIntentBits,
   EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   Events,
-  MessageFlags,
+  Partials,
+  ChannelType,
   type TextChannel,
+  type DMChannel,
   type Interaction,
+  type Message,
 } from "discord.js";
-import type { Opportunity, TriageAction } from "../types.js";
+import type { Opportunity } from "../types.js";
+import { respond } from "../ai/respond.js";
 
-export interface TriageHandlers {
-  apply(opp: Opportunity): string;
-  skip(opp: Opportunity): string;
-  more(opp: Opportunity): string;
+export interface AIConfig {
+  apiKey: string;
+  model: string;
+  profile: string;
 }
 
 export class DiscordBot {
   private readonly client: Client;
   private channel: TextChannel | null = null;
-  // keyed by opp id so button presses can resolve the full record
+  private dmChannel: DMChannel | null = null;
+  // keyed by opp id so DM triage can resolve the full record
   private readonly posted = new Map<string, Opportunity>();
+  private readonly ai: AIConfig | null;
 
   constructor(
     private readonly token: string,
     private readonly channelId: string,
-    private readonly handlers: TriageHandlers,
+    private readonly userId: string,
+    ai: AIConfig | null,
   ) {
-    this.client = new Client({ intents: [GatewayIntentBits.Guilds] });
-    this.client.on(Events.InteractionCreate, (i) => void this.onInteraction(i));
+    this.ai = ai;
+    this.client = new Client({
+      intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
+      partials: [Partials.Channel, Partials.Message],
+    });
+    this.client.on(Events.MessageCreate, (m) => void this.onMessage(m));
   }
 
   async start(): Promise<void> {
@@ -39,22 +47,18 @@ export class DiscordBot {
       this.client.once(Events.Error, rej);
       this.client.login(this.token).catch(rej);
     });
+
     const ch = await this.client.channels.fetch(this.channelId);
     if (!ch || !ch.isTextBased() || !("send" in ch)) {
       throw new Error(`Channel ${this.channelId} is not a text channel the bot can post to.`);
     }
     this.channel = ch as TextChannel;
-    console.log(`Discord bot ready as ${this.client.user?.tag}.`);
-  }
 
-  private buttons(id: string): ActionRowBuilder<ButtonBuilder> {
-    const mk = (action: TriageAction, label: string, style: ButtonStyle) =>
-      new ButtonBuilder().setCustomId(`${action}:${id}`).setLabel(label).setStyle(style);
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      mk("apply", "Apply", ButtonStyle.Success),
-      mk("skip", "Skip", ButtonStyle.Secondary),
-      mk("more", "More like this", ButtonStyle.Primary),
-    );
+    // open DM channel with the user up front so first notify is instant
+    const user = await this.client.users.fetch(this.userId);
+    this.dmChannel = await user.createDM();
+
+    console.log(`Discord bot ready as ${this.client.user?.tag}.`);
   }
 
   async postOpportunity(opp: Opportunity): Promise<void> {
@@ -65,7 +69,7 @@ export class DiscordBot {
       .setURL(opp.url)
       .setDescription([opp.location, `via ${opp.source}`].filter(Boolean).join(" · ") || null)
       .setColor(0x5865f2);
-    await this.channel.send({ embeds: [embed], components: [this.buttons(opp.id)] });
+    await this.channel.send({ embeds: [embed] });
   }
 
   async postSummary(text: string): Promise<void> {
@@ -73,25 +77,35 @@ export class DiscordBot {
     await this.channel.send(text.slice(0, 2000));
   }
 
-  private async onInteraction(interaction: Interaction): Promise<void> {
-    if (!interaction.isButton()) return;
-    const [action, id] = interaction.customId.split(":") as [TriageAction, string];
-    const opp = this.posted.get(id);
-    if (!opp) {
-      await interaction.reply({
-        content: "This drop expired after a restart. It's still in your feed, just re-scan.",
-        flags: MessageFlags.Ephemeral,
-      });
+  /** DM the user after a scan with new drops. */
+  async notifyUser(freshCount: number): Promise<void> {
+    if (!this.dmChannel) return;
+    await this.dmChannel.send(
+      `${freshCount} new drop${freshCount === 1 ? "" : "s"} just posted. tell me which ones you want to act on.`,
+    );
+  }
+
+  private async onMessage(message: Message): Promise<void> {
+    if (message.author.bot) return;
+    if (message.channel.type !== ChannelType.DM) return;
+    if (message.author.id !== this.userId) return;
+
+    if (!this.ai?.apiKey) {
+      await message.reply("no claude api key configured — set CLAUDE_API_KEY on the vps to enable chat.");
       return;
     }
-    let reply: string;
-    if (action === "apply") reply = this.handlers.apply(opp);
-    else if (action === "skip") reply = this.handlers.skip(opp);
-    else reply = this.handlers.more(opp);
 
-    // disable buttons so the decision is visible and final
-    await interaction.update({ components: [] });
-    await interaction.followUp({ content: reply, flags: MessageFlags.Ephemeral });
+    try {
+      const reply = await respond(message.content, this.posted, this.ai.profile, this.ai.apiKey, this.ai.model);
+      await message.reply(reply.slice(0, 2000));
+    } catch (err) {
+      console.error(`DM handler failed: ${(err as Error).message}`);
+      await message.reply("something went wrong on my end, try again.");
+    }
+  }
+
+  getPosted(): Map<string, Opportunity> {
+    return this.posted;
   }
 
   async stop(): Promise<void> {
