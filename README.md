@@ -1,6 +1,6 @@
 # modus
 
-watches internship and hackathon feeds and posts new drops to a private Discord channel with **Apply / Skip / More like this** buttons. self-hosted, no always-on hardware beyond a $6 VPS.
+watches internship and hackathon feeds and posts new drops to a discord dm. hosted on $6 vps.
 
 ## setup
 
@@ -27,11 +27,5 @@ edit `config/sources.json`:
 npm install && npm run build
 DISCORD_TOKEN=... DISCORD_CHANNEL_ID=... npm start
 ```
-
-## roadmap
-
-- apply handoff to career-ops: queue → tailor CV → human submits
-- more sources (Devpost/MLH, Greenhouse/Ashby/Lever)
-- natural-language triage
 
 MIT.
