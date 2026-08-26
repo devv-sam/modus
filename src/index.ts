@@ -49,10 +49,7 @@ async function scanOnce(bot: DiscordBot, cfg: ReturnType<typeof loadConfig>, pro
     }
 
     for (const opp of toPost) await bot.postOpportunity(opp);
-    if (toPost.length > 0) {
-      await bot.notifyUser(toPost.length);
-      console.log(`Posted ${toPost.length} fresh drops.`);
-    }
+    if (toPost.length > 0) console.log(`Posted ${toPost.length} fresh drops.`);
   }
 
   saveSeen(seen, relevant); // record everything scanned so seeded roles never re-alert

@@ -9,7 +9,7 @@ import {
   type DMChannel,
   type Message,
 } from "discord.js";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Opportunity } from "../types.js";
@@ -110,13 +110,6 @@ export class DiscordBot {
     await this.channel.send(text.slice(0, 2000));
   }
 
-  async notifyUser(freshCount: number): Promise<void> {
-    if (!this.dmChannel) return;
-    await this.dmChannel.send(
-      `${freshCount} new drop${freshCount === 1 ? "" : "s"} just posted. tell me which ones you want to act on.`,
-    );
-  }
-
   private async onMessage(message: Message): Promise<void> {
     if (message.author.bot) return;
     if (message.channel.type !== ChannelType.DM) return;
@@ -138,8 +131,13 @@ export class DiscordBot {
     }
 
     try {
-      const reply = await respond(message.content, this.posted, this.profile, this.ai.apiKey, this.ai.model);
-      await message.channel.send(reply.slice(0, 2000));
+      const result = await respond(message.content, this.posted, this.profile, this.ai.apiKey, this.ai.model);
+      await message.channel.send(result.reply.slice(0, 2000));
+      if (result.profileUpdate) {
+        appendFileSync(PROFILE_PATH, `\n## preference update (${new Date().toISOString().slice(0, 10)})\n${result.profileUpdate}\n`);
+        this.profile = readFileSync(PROFILE_PATH, "utf8");
+        console.log("Profile updated from chat.");
+      }
     } catch (err) {
       console.error(`DM handler failed: ${(err as Error).message}`);
       await message.channel.send("something went wrong on my end, try again.");
