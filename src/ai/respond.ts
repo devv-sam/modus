@@ -43,14 +43,16 @@ Respond ONLY with valid JSON — no text outside it:
 
   const raw = await callClaude(apiKey, model, system, userMessage, 700);
 
+  // strip markdown code fences the model sometimes wraps around JSON
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+
   try {
-    const parsed = JSON.parse(raw) as { reply?: string; profileUpdate?: string };
+    const parsed = JSON.parse(cleaned) as { reply?: string; profileUpdate?: string };
     return {
-      reply: parsed.reply?.trim() ?? raw.trim(),
+      reply: parsed.reply?.trim() ?? cleaned,
       profileUpdate: parsed.profileUpdate?.trim() || undefined,
     };
   } catch {
-    // model didn't return valid JSON — just use the raw text
-    return { reply: raw.trim() };
+    return { reply: cleaned };
   }
 }
