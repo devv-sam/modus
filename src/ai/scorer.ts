@@ -30,7 +30,8 @@ Respond with valid JSON only: {"score": <1-5 integer>, "reason": "<one short sen
 
   try {
     const raw = await callClaude(apiKey, model, system, prompt, 80);
-    const parsed = JSON.parse(raw) as { score: number; reason: string };
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    const parsed = JSON.parse(cleaned) as { score: number; reason: string };
     return { score: Math.round(Math.min(5, Math.max(1, parsed.score))), reason: parsed.reason ?? "" };
   } catch {
     return { score: 3, reason: "scoring unavailable" };
