@@ -9,10 +9,16 @@ import {
   type DMChannel,
   type Message,
 } from "discord.js";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Opportunity } from "../types.js";
 import { respond } from "../ai/respond.js";
 import { Onboarding, PROFILE_PATH } from "./onboarding.js";
+
+const DATA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "data");
+const RECENT_PATH = resolve(DATA_DIR, "recent.json");
+const MAX_RECENT = 50;
 
 export interface AIConfig {
   apiKey: string;
@@ -23,7 +29,7 @@ export class DiscordBot {
   private readonly client: Client;
   private channel: TextChannel | null = null;
   private dmChannel: DMChannel | null = null;
-  // keyed by opp id so DM triage can resolve the full record
+  // keyed by opp id so DM triage can resolve the full record; persisted across restarts
   private readonly posted = new Map<string, Opportunity>();
   private readonly ai: AIConfig | null;
   private profile: string;
@@ -38,11 +44,28 @@ export class DiscordBot {
   ) {
     this.ai = ai;
     this.profile = profile;
+    this.loadRecent();
     this.client = new Client({
       intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
       partials: [Partials.Channel, Partials.Message],
     });
     this.client.on(Events.MessageCreate, (m) => void this.onMessage(m));
+  }
+
+  private loadRecent(): void {
+    if (!existsSync(RECENT_PATH)) return;
+    try {
+      const opps = JSON.parse(readFileSync(RECENT_PATH, "utf8")) as Opportunity[];
+      for (const opp of opps) this.posted.set(opp.id, opp);
+    } catch {
+      // corrupt file — start fresh
+    }
+  }
+
+  private saveRecent(): void {
+    mkdirSync(DATA_DIR, { recursive: true });
+    const opps = [...this.posted.values()].slice(-MAX_RECENT);
+    writeFileSync(RECENT_PATH, JSON.stringify(opps, null, 2) + "\n", "utf8");
   }
 
   async start(): Promise<void> {
@@ -61,9 +84,8 @@ export class DiscordBot {
     const user = await this.client.users.fetch(this.userId);
     this.dmChannel = await user.createDM();
 
-    console.log(`Discord bot ready as ${this.client.user?.tag}.`);
+    console.log(`Discord bot ready as ${this.client.user?.tag}. Loaded ${this.posted.size} recent drops from disk.`);
 
-    // kick off onboarding if no profile exists yet
     if (!this.profile) {
       this.onboarding = new Onboarding();
       await this.dmChannel.send(this.onboarding.intro());
@@ -73,6 +95,7 @@ export class DiscordBot {
   async postOpportunity(opp: Opportunity): Promise<void> {
     if (!this.channel) throw new Error("Bot not started.");
     this.posted.set(opp.id, opp);
+    this.saveRecent();
     const embed = new EmbedBuilder()
       .setTitle(`${opp.company} — ${opp.title}`.slice(0, 256))
       .setURL(opp.url)
@@ -99,12 +122,10 @@ export class DiscordBot {
     if (message.channel.type !== ChannelType.DM) return;
     if (message.author.id !== this.userId) return;
 
-    // onboarding takes priority over normal chat
     if (this.onboarding?.active) {
       const { reply, done } = this.onboarding.next(message.content);
       await message.channel.send(reply);
       if (done) {
-        // reload profile from the file the onboarding just wrote
         this.profile = existsSync(PROFILE_PATH) ? readFileSync(PROFILE_PATH, "utf8") : "";
         this.onboarding = null;
       }
@@ -123,10 +144,6 @@ export class DiscordBot {
       console.error(`DM handler failed: ${(err as Error).message}`);
       await message.channel.send("something went wrong on my end, try again.");
     }
-  }
-
-  getPosted(): Map<string, Opportunity> {
-    return this.posted;
   }
 
   async stop(): Promise<void> {
