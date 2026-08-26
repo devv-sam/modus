@@ -79,6 +79,7 @@ export class DiscordBot {
       .setDescription([opp.location, `via ${opp.source}`].filter(Boolean).join(" · ") || null)
       .setColor(0x5865f2);
     await this.channel.send({ embeds: [embed] });
+    await this.dmChannel?.send({ embeds: [embed] });
   }
 
   async postSummary(text: string): Promise<void> {
@@ -101,7 +102,7 @@ export class DiscordBot {
     // onboarding takes priority over normal chat
     if (this.onboarding?.active) {
       const { reply, done } = this.onboarding.next(message.content);
-      await message.reply(reply);
+      await message.channel.send(reply);
       if (done) {
         // reload profile from the file the onboarding just wrote
         this.profile = existsSync(PROFILE_PATH) ? readFileSync(PROFILE_PATH, "utf8") : "";
@@ -111,16 +112,16 @@ export class DiscordBot {
     }
 
     if (!this.ai?.apiKey) {
-      await message.reply("no claude api key configured — set CLAUDE_API_KEY in /etc/modus.env to enable chat.");
+      await message.channel.send("no claude api key configured — set CLAUDE_API_KEY in /etc/modus.env to enable chat.");
       return;
     }
 
     try {
       const reply = await respond(message.content, this.posted, this.profile, this.ai.apiKey, this.ai.model);
-      await message.reply(reply.slice(0, 2000));
+      await message.channel.send(reply.slice(0, 2000));
     } catch (err) {
       console.error(`DM handler failed: ${(err as Error).message}`);
-      await message.reply("something went wrong on my end, try again.");
+      await message.channel.send("something went wrong on my end, try again.");
     }
   }
 
