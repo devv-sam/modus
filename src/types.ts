@@ -7,6 +7,9 @@ export interface Opportunity {
   location?: string;
   postedAt?: string;
   source: string;
+  fit?: number;
+  reason?: string;
+  deadline?: string | null;
 }
 
 export interface FieldMap {
@@ -40,9 +43,9 @@ export interface Config {
   scanIntervalMinutes: number;
   filter: Filter;
   sources: Source[];
-  claudeApiKey: string;      // overridden by CLAUDE_API_KEY env var
-  claudeModel: string;       // overridden by CLAUDE_MODEL env var
-  scoreThreshold: number;    // min score (1-5) to post a drop, default 3
+  ollamaUrl: string;         // overridden by OLLAMA_URL env var
+  ollamaModel: string;       // overridden by OLLAMA_MODEL env var
+  scoreThreshold: number;    // min score (1-5) to post a drop, default 4
 }
 
 // encoded into button custom ids as <action>:<opportunityId>

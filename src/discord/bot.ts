@@ -14,16 +14,12 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Opportunity } from "../types.js";
 import { respond } from "../ai/respond.js";
+import type { Llm } from "../ai/llm.js";
 import { Onboarding, PROFILE_PATH } from "./onboarding.js";
 
 const DATA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "data");
 const RECENT_PATH = resolve(DATA_DIR, "recent.json");
 const MAX_RECENT = 50;
-
-export interface AIConfig {
-  apiKey: string;
-  model: string;
-}
 
 export class DiscordBot {
   private readonly client: Client;
@@ -31,7 +27,6 @@ export class DiscordBot {
   private dmChannel: DMChannel | null = null;
   // keyed by opp id so DM triage can resolve the full record; persisted across restarts
   private readonly posted = new Map<string, Opportunity>();
-  private readonly ai: AIConfig | null;
   private profile: string;
   private onboarding: Onboarding | null = null;
 
@@ -39,10 +34,9 @@ export class DiscordBot {
     private readonly token: string,
     private readonly channelId: string,
     private readonly userId: string,
-    ai: AIConfig | null,
+    private readonly llm: Llm,
     profile: string,
   ) {
-    this.ai = ai;
     this.profile = profile;
     this.loadRecent();
     this.client = new Client({
@@ -99,7 +93,15 @@ export class DiscordBot {
     const embed = new EmbedBuilder()
       .setTitle(`${opp.company} — ${opp.title}`.slice(0, 256))
       .setURL(opp.url)
-      .setDescription([opp.location, `via ${opp.source}`].filter(Boolean).join(" · ") || null)
+      .setDescription(
+        [
+          opp.fit ? `fit ${opp.fit}/5 — ${opp.reason}` : null,
+          opp.deadline ? `deadline ${opp.deadline}` : null,
+          [opp.location, `via ${opp.source}`].filter(Boolean).join(" · "),
+        ]
+          .filter(Boolean)
+          .join("\n") || null,
+      )
       .setColor(0x5865f2);
     await this.channel.send({ embeds: [embed] });
     await this.dmChannel?.send({ embeds: [embed] });
@@ -125,13 +127,8 @@ export class DiscordBot {
       return;
     }
 
-    if (!this.ai?.apiKey) {
-      await message.channel.send("no claude api key configured — set CLAUDE_API_KEY in /etc/modus.env to enable chat.");
-      return;
-    }
-
     try {
-      const result = await respond(message.content, this.posted, this.profile, this.ai.apiKey, this.ai.model);
+      const result = await respond(message.content, this.posted, this.profile, this.llm);
       await message.channel.send(result.reply.slice(0, 2000));
       if (result.profileUpdate) {
         appendFileSync(PROFILE_PATH, `\n## preference update (${new Date().toISOString().slice(0, 10)})\n${result.profileUpdate}\n`);

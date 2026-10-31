@@ -31,9 +31,9 @@ export function loadConfig(): Config {
     scanIntervalMinutes: Math.max(1, Number(process.env.SCAN_INTERVAL_MINUTES ?? raw.scanIntervalMinutes ?? 15)),
     filter: { include: raw.filter?.include ?? [], exclude: raw.filter?.exclude ?? [] },
     sources: raw.sources,
-    claudeApiKey: process.env.CLAUDE_API_KEY ?? raw.claudeApiKey ?? "",
-    claudeModel: process.env.CLAUDE_MODEL ?? raw.claudeModel ?? "claude-haiku-4-5-20251001",
-    scoreThreshold: Number(process.env.SCORE_THRESHOLD ?? raw.scoreThreshold ?? 3),
+    ollamaUrl: process.env.OLLAMA_URL ?? raw.ollamaUrl ?? "http://localhost:11434",
+    ollamaModel: process.env.OLLAMA_MODEL ?? raw.ollamaModel ?? "qwen2.5:7b",
+    scoreThreshold: Number(process.env.SCORE_THRESHOLD ?? raw.scoreThreshold ?? 4),
   };
 }
 
