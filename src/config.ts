@@ -24,6 +24,8 @@ export function loadConfig(): Config {
     throw new Error("config/sources.json has no sources.");
   }
 
+  const dossierUrl = (process.env.DOSSIER_URL ?? raw.dossierUrl ?? "http://localhost:3000").replace(/\/+$/, "");
+
   return {
     discordToken,
     discordChannelId,
@@ -33,6 +35,8 @@ export function loadConfig(): Config {
     sources: raw.sources,
     ollamaUrl: process.env.OLLAMA_URL ?? raw.ollamaUrl ?? "http://localhost:11434",
     ollamaModel: process.env.OLLAMA_MODEL ?? raw.ollamaModel ?? "qwen2.5:7b",
+    dossierUrl,
+    dossierPublicUrl: (process.env.DOSSIER_PUBLIC_URL ?? raw.dossierPublicUrl ?? dossierUrl).replace(/\/+$/, ""),
     scoreThreshold: Number(process.env.SCORE_THRESHOLD ?? raw.scoreThreshold ?? 4),
   };
 }

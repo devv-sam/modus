@@ -45,6 +45,8 @@ export interface Config {
   sources: Source[];
   ollamaUrl: string;         // overridden by OLLAMA_URL env var
   ollamaModel: string;       // overridden by OLLAMA_MODEL env var
+  dossierUrl: string;        // overridden by DOSSIER_URL env var
+  dossierPublicUrl: string;  // overridden by DOSSIER_PUBLIC_URL env var — what links in DMs point to
   scoreThreshold: number;    // min score (1-5) to post a drop, default 4
 }
 

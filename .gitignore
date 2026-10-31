@@ -9,3 +9,6 @@ data/interests.json
 config/profile.md
 .env
 logs/
+data/dossier-auth.json
+data/dossier-sent.json
+data/recent.json
