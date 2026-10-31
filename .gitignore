@@ -7,3 +7,5 @@ data/seen.json
 data/queue.json
 data/interests.json
 config/profile.md
+.env
+logs/
