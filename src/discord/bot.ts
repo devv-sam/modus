@@ -173,17 +173,19 @@ export class DiscordBot {
       this.sent[opp.id] = { status: "drafted", applicationId, link };
       saveSent(this.sent);
 
-      const text = await this.dossier.read(applicationId);
-      const slug = opp.company.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "role";
-      const files = [
-        text.resume && new AttachmentBuilder(Buffer.from(text.resume, "utf8"), { name: `resume-${slug}.md` }),
-        text.coverLetter && new AttachmentBuilder(Buffer.from(text.coverLetter, "utf8"), { name: `cover-letter-${slug}.md` }),
-      ].filter((f): f is AttachmentBuilder => Boolean(f));
+      const files = await this.documentFiles(applicationId, opp.company);
       const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId(`applied:${opp.id}`).setLabel("I applied").setStyle(ButtonStyle.Success),
       );
+      const remote = this.dossier.reachableLink(applicationId);
       await this.dmChannel.send({
-        content: `draft ready for **${opp.company} — ${opp.title}**\nopen it in dossier to pick a theme and download the PDF: ${link}\nthe apply page: ${opp.url}`,
+        content: [
+          `draft ready for **${opp.company} — ${opp.title}**`,
+          remote ? `edit it in dossier: ${remote}` : "",
+          `apply here: ${opp.url}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
         files,
         components: [row],
       });
@@ -193,6 +195,22 @@ export class DiscordBot {
       console.error(`Dossier draft failed for ${opp.company}: ${(err as Error).message}`);
       await this.dmChannel.send(`dossier couldn't draft ${opp.company} — ${opp.title}: ${(err as Error).message.slice(0, 300)}`);
     }
+  }
+
+  /** Dossier's own PDFs, or the plain text when its connector can't render them. */
+  private async documentFiles(applicationId: string, company: string): Promise<AttachmentBuilder[]> {
+    const dossier = this.dossier!;
+    const pdfs = await Promise.allSettled([dossier.pdf(applicationId, "resume"), dossier.pdf(applicationId, "letter")]);
+    const files = pdfs.flatMap((r) => (r.status === "fulfilled" ? [new AttachmentBuilder(r.value.data, { name: r.value.fileName })] : []));
+    if (files.length > 0) return files;
+
+    console.warn(`PDF unavailable (${(pdfs[0] as PromiseRejectedResult).reason}), sending text instead.`);
+    const text = await dossier.read(applicationId);
+    const slug = company.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "role";
+    return [
+      text.resume && new AttachmentBuilder(Buffer.from(text.resume, "utf8"), { name: `resume-${slug}.md` }),
+      text.coverLetter && new AttachmentBuilder(Buffer.from(text.coverLetter, "utf8"), { name: `cover-letter-${slug}.md` }),
+    ].filter((f): f is AttachmentBuilder => Boolean(f));
   }
 
   async postSummary(text: string): Promise<void> {

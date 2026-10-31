@@ -76,6 +76,19 @@ export class Dossier {
     return { title: app.title, resume: app.resume ?? "", coverLetter: app.cover_letter ?? "" };
   }
 
+  /** The PDF as Dossier renders it; needs the devv-sam fork, whose connector has get_application_pdf. */
+  async pdf(applicationId: string, doc: "resume" | "letter"): Promise<{ fileName: string; data: Buffer }> {
+    const out = await this.call<{ file_name: string; pdf_base64: string }>("get_application_pdf", { id: applicationId, doc });
+    const fileName = out.file_name.toLowerCase().endsWith(".pdf") ? out.file_name : `${out.file_name}.pdf`;
+    return { fileName, data: Buffer.from(out.pdf_base64, "base64") };
+  }
+
+  /** A link worth sending: one that opens away from this computer. */
+  reachableLink(applicationId: string): string | null {
+    const { hostname } = new URL(this.publicUrl);
+    return ["localhost", "127.0.0.1", "[::1]"].includes(hostname) ? null : this.linkTo(applicationId);
+  }
+
   async markApplied(applicationId: string): Promise<void> {
     await this.call("set_application_status", { id: applicationId, status: "SENT" });
   }
