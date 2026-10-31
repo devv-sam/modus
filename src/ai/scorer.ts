@@ -1,4 +1,4 @@
-import { callClaude } from "./claude.js";
+import type { Llm } from "./llm.js";
 import type { Opportunity } from "../types.js";
 
 export interface ScoreResult {
@@ -9,8 +9,7 @@ export interface ScoreResult {
 export async function scoreOpportunity(
   opp: Opportunity,
   profile: string,
-  apiKey: string,
-  model: string,
+  llm: Llm,
 ): Promise<ScoreResult> {
   const system = `You are a strict relevance filter for a job search. Score how well this role matches the candidate.
 
@@ -29,10 +28,17 @@ Respond with valid JSON only: {"score": <1-5 integer>, "reason": "<one short sen
   const prompt = `Company: ${opp.company}\nRole: ${opp.title}\nLocation: ${opp.location ?? "unknown"}`;
 
   try {
-    const raw = await callClaude(apiKey, model, system, prompt, 80);
-    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-    const parsed = JSON.parse(cleaned) as { score: number; reason: string };
-    return { score: Math.round(Math.min(5, Math.max(1, parsed.score))), reason: parsed.reason ?? "" };
+    const parsed = await llm.json(
+      system,
+      prompt,
+      (v) => {
+        const o = v as { score?: unknown; reason?: unknown } | null;
+        if (typeof o?.score !== "number") return null;
+        return { score: o.score, reason: typeof o.reason === "string" ? o.reason : "" };
+      },
+      80,
+    );
+    return { score: Math.round(Math.min(5, Math.max(1, parsed.score))), reason: parsed.reason };
   } catch {
     return { score: 3, reason: "scoring unavailable" };
   }

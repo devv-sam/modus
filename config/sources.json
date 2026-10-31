@@ -3,9 +3,9 @@
   "discordChannelId": "",
   "discordUserId": "",
   "scanIntervalMinutes": 15,
-  "claudeApiKey": "",
-  "claudeModel": "claude-haiku-4-5-20251001",
-  "scoreThreshold": 3,
+  "ollamaUrl": "http://localhost:11434",
+  "ollamaModel": "qwen2.5:7b",
+  "scoreThreshold": 4,
   "filter": {
     "include": ["intern", "internship", "co-op", "new grad"],
     "exclude": ["senior", "staff", "principal", "manager", "phd"]

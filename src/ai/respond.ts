@@ -1,4 +1,4 @@
-import { callClaude } from "./claude.js";
+import type { Llm } from "./llm.js";
 import type { Opportunity } from "../types.js";
 
 export interface RespondResult {
@@ -10,8 +10,7 @@ export async function respond(
   userMessage: string,
   recentDrops: Map<string, Opportunity>,
   profile: string,
-  apiKey: string,
-  model: string,
+  llm: Llm,
 ): Promise<RespondResult> {
   const dropsList = [...recentDrops.values()]
     .map((o, i) => `${i + 1}. ${o.company} — ${o.title}${o.location ? ` (${o.location})` : ""}\n   ${o.url}`)
@@ -41,18 +40,15 @@ Respond ONLY with valid JSON — no text outside it:
   "profileUpdate": "<only if the user gave new preferences to remember — write a concise summary of what changed to append to their profile. omit this field entirely if no profile update.>"
 }`;
 
-  const raw = await callClaude(apiKey, model, system, userMessage, 700);
-
-  // strip markdown code fences the model sometimes wraps around JSON
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-
-  try {
-    const parsed = JSON.parse(cleaned) as { reply?: string; profileUpdate?: string };
-    return {
-      reply: parsed.reply?.trim() ?? cleaned,
-      profileUpdate: parsed.profileUpdate?.trim() || undefined,
-    };
-  } catch {
-    return { reply: cleaned };
-  }
+  return llm.json(
+    system,
+    userMessage,
+    (v) => {
+      const o = v as { reply?: unknown; profileUpdate?: unknown } | null;
+      if (typeof o?.reply !== "string" || !o.reply.trim()) return null;
+      const update = typeof o.profileUpdate === "string" ? o.profileUpdate.trim() : "";
+      return { reply: o.reply.trim(), profileUpdate: update || undefined };
+    },
+    700,
+  );
 }
