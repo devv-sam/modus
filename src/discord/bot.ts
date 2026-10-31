@@ -93,7 +93,15 @@ export class DiscordBot {
     const embed = new EmbedBuilder()
       .setTitle(`${opp.company} — ${opp.title}`.slice(0, 256))
       .setURL(opp.url)
-      .setDescription([opp.location, `via ${opp.source}`].filter(Boolean).join(" · ") || null)
+      .setDescription(
+        [
+          opp.fit ? `fit ${opp.fit}/5 — ${opp.reason}` : null,
+          opp.deadline ? `deadline ${opp.deadline}` : null,
+          [opp.location, `via ${opp.source}`].filter(Boolean).join(" · "),
+        ]
+          .filter(Boolean)
+          .join("\n") || null,
+      )
       .setColor(0x5865f2);
     await this.channel.send({ embeds: [embed] });
     await this.dmChannel?.send({ embeds: [embed] });

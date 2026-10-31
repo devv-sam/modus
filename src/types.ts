@@ -7,6 +7,9 @@ export interface Opportunity {
   location?: string;
   postedAt?: string;
   source: string;
+  fit?: number;
+  reason?: string;
+  deadline?: string | null;
 }
 
 export interface FieldMap {

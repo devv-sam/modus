@@ -22,6 +22,7 @@ async function scanOnce(bot: DiscordBot, cfg: ReturnType<typeof loadConfig>, pro
   const relevant = applyFilter(scanned, cfg.filter);
   const seen = loadSeen();
   const { fresh, firstRun } = diff(relevant, seen);
+  const unscored = new Set<string>();
 
   if (firstRun) {
     await bot.postSummary(
@@ -38,22 +39,26 @@ async function scanOnce(bot: DiscordBot, cfg: ReturnType<typeof loadConfig>, pro
     // score against the profile if there is one, otherwise post all
     let toPost = fresh;
     if (profile) {
-      const scored = await Promise.all(
-        fresh.map(async (opp) => {
-          const result = await scoreOpportunity(opp, profile, llm);
-          return { opp, ...result };
-        }),
-      );
-      toPost = scored.filter((s) => s.score >= cfg.scoreThreshold).map((s) => s.opp);
-      const skipped = fresh.length - toPost.length;
-      if (skipped > 0) console.log(`Filtered ${skipped} drops below score threshold (${cfg.scoreThreshold}).`);
+      toPost = [];
+      for (const opp of fresh) {
+        try {
+          const { fit, reason, deadline } = await scoreOpportunity(opp, profile, llm);
+          if (fit >= cfg.scoreThreshold) toPost.push({ ...opp, fit, reason, deadline });
+        } catch (err) {
+          // leave it out of the seen set so the next tick retries
+          unscored.add(opp.id);
+          console.error(`Scoring failed for ${opp.company} — ${opp.title}: ${(err as Error).message}`);
+        }
+      }
+      const skipped = fresh.length - toPost.length - unscored.size;
+      if (skipped > 0) console.log(`Filtered ${skipped} drops below fit ${cfg.scoreThreshold}.`);
     }
 
     for (const opp of toPost) await bot.postOpportunity(opp);
     if (toPost.length > 0) console.log(`Posted ${toPost.length} fresh drops.`);
   }
 
-  saveSeen(seen, relevant); // record everything scanned so seeded roles never re-alert
+  saveSeen(seen, relevant.filter((o) => !unscored.has(o.id))); // record everything scanned so seeded roles never re-alert
 }
 
 async function main(): Promise<void> {
