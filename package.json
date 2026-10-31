@@ -7,8 +7,8 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsc && node dist/index.js"
+    "start": "node --env-file=.env dist/index.js",
+    "dev": "tsc && node --env-file=.env dist/index.js"
   },
   "dependencies": {
     "discord.js": "^14.16.3"
