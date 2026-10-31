@@ -28,13 +28,30 @@ export function loadSeen(): Set<string> {
   }
 }
 
+const TRACKING_PARAM = /^(utm_|ref$|source$|src$|gh_src$|lever-)/i;
+
+/** The same role listed by two sources has different ids but the same link once tracking is stripped. */
+export function linkKey(url: string): string {
+  try {
+    const u = new URL(url);
+    for (const key of [...u.searchParams.keys()]) if (TRACKING_PARAM.test(key)) u.searchParams.delete(key);
+    return `${u.hostname.toLowerCase()}${u.pathname.replace(/\/+$/, "")}${u.search}`;
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
 export function diff(all: Opportunity[], seen: Set<string>): DedupeResult {
   const firstRun = seen.size === 0;
   const fresh: Opportunity[] = [];
   const batch = new Set<string>();
+  // seen ids carry no links, so a role already seen under one source's id blocks its twin under another's
+  const seenLinks = new Set(all.filter((opp) => seen.has(opp.id)).map((opp) => linkKey(opp.url)));
   for (const opp of all) {
-    if (seen.has(opp.id) || batch.has(opp.id)) continue;
+    const link = linkKey(opp.url);
+    if (seen.has(opp.id) || batch.has(opp.id) || seenLinks.has(link) || batch.has(link)) continue;
     batch.add(opp.id);
+    batch.add(link);
     fresh.push(opp);
   }
   return { fresh, firstRun, seenCount: seen.size };
