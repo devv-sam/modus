@@ -4,6 +4,8 @@ import { applyFilter } from "./filter.js";
 import { loadSeen, diff, saveSeen } from "./dedupe.js";
 import { DiscordBot } from "./discord/bot.js";
 import { queueApply, recordInterest } from "./triage.js";
+import { Dossier } from "./dossier/client.js";
+import { isConnected } from "./dossier/auth.js";
 import { Llm } from "./ai/llm.js";
 import { scoreOpportunity } from "./ai/scorer.js";
 import type { Opportunity } from "./types.js";
@@ -66,7 +68,9 @@ async function main(): Promise<void> {
   if (!loadProfile()) console.warn("No config/profile.md found — drops will post unscored and chat has no candidate context.");
 
   const llm = new Llm(cfg.ollamaUrl, cfg.ollamaModel);
-  const bot = new DiscordBot(cfg.discordToken, cfg.discordChannelId, cfg.discordUserId, llm);
+  const dossier = isConnected() ? new Dossier(cfg.dossierUrl, cfg.dossierPublicUrl) : null;
+  if (!dossier) console.warn("Dossier isn't connected: drops post without the Send to Dossier button. Run: npm run connect-dossier");
+  const bot = new DiscordBot(cfg.discordToken, cfg.discordChannelId, cfg.discordUserId, llm, dossier);
   await bot.start();
 
   const intervalMs = cfg.scanIntervalMinutes * 60_000;

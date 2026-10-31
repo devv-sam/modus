@@ -2,12 +2,17 @@ import {
   Client,
   GatewayIntentBits,
   EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  AttachmentBuilder,
   Events,
   Partials,
   ChannelType,
   type TextChannel,
   type DMChannel,
   type Message,
+  type ButtonInteraction,
 } from "discord.js";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -16,6 +21,8 @@ import type { Opportunity } from "../types.js";
 import { respond } from "../ai/respond.js";
 import type { Llm } from "../ai/llm.js";
 import { loadProfile, PROFILE_PATH } from "../config.js";
+import type { Dossier } from "../dossier/client.js";
+import { loadSent, saveSent } from "../dossier/sent.js";
 
 const DATA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "data");
 const RECENT_PATH = resolve(DATA_DIR, "recent.json");
@@ -27,19 +34,28 @@ export class DiscordBot {
   private dmChannel: DMChannel | null = null;
   // keyed by opp id so DM triage can resolve the full record; persisted across restarts
   private readonly posted = new Map<string, Opportunity>();
+  private readonly sent = loadSent();
+  // one draft at a time: the local model is the bottleneck
+  private drafting: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly token: string,
     private readonly channelId: string,
     private readonly userId: string,
     private readonly llm: Llm,
+    private readonly dossier: Dossier | null,
   ) {
     this.loadRecent();
+    // a draft interrupted by a restart never finished, so let it be sent again
+    for (const [id, record] of Object.entries(this.sent)) if (record.status === "drafting") delete this.sent[id];
     this.client = new Client({
       intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
       partials: [Partials.Channel, Partials.Message],
     });
     this.client.on(Events.MessageCreate, (m) => void this.onMessage(m));
+    this.client.on(Events.InteractionCreate, (i) => {
+      if (i.isButton()) void this.onButton(i);
+    });
   }
 
   private loadRecent(): void {
@@ -94,8 +110,89 @@ export class DiscordBot {
           .join("\n") || null,
       )
       .setColor(0x5865f2);
-    await this.channel.send({ embeds: [embed] });
-    await this.dmChannel?.send({ embeds: [embed] });
+    const components = this.dossier
+      ? [
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`send:${opp.id}`).setLabel("Send to Dossier").setStyle(ButtonStyle.Primary),
+          ),
+        ]
+      : [];
+    await this.channel.send({ embeds: [embed], components });
+    await this.dmChannel?.send({ embeds: [embed], components });
+  }
+
+  private async onButton(interaction: ButtonInteraction): Promise<void> {
+    if (interaction.user.id !== this.userId) return void (await interaction.deferUpdate());
+    const sep = interaction.customId.indexOf(":");
+    const action = interaction.customId.slice(0, sep);
+    const id = interaction.customId.slice(sep + 1);
+
+    if (!this.dossier) {
+      await interaction.reply("dossier isn't connected. run `npm run connect-dossier` on the laptop.");
+      return;
+    }
+
+    if (action === "send") {
+      const opp = this.posted.get(id);
+      const existing = this.sent[id];
+      if (existing) {
+        const where = existing.link ? ` ${existing.link}` : "";
+        await interaction.reply(existing.status === "drafting" ? "already drafting that one, i'll ping you." : `already in dossier.${where}`);
+        return;
+      }
+      if (!opp) {
+        await interaction.reply("i don't have that role anymore.");
+        return;
+      }
+      this.sent[id] = { status: "drafting" };
+      saveSent(this.sent);
+      await interaction.reply(`sending ${opp.company} to dossier. drafting takes a few minutes, i'll ping you when it's ready.`);
+      this.drafting = this.drafting.then(() => this.runDraft(opp));
+    } else if (action === "applied") {
+      const record = this.sent[id];
+      if (!record?.applicationId) {
+        await interaction.reply("i can't find that application in dossier.");
+        return;
+      }
+      try {
+        await this.dossier.markApplied(record.applicationId);
+        record.status = "applied";
+        saveSent(this.sent);
+        await interaction.reply("marked as sent in dossier. good luck.");
+      } catch (err) {
+        console.error(`Marking applied failed: ${(err as Error).message}`);
+        await interaction.reply("couldn't update dossier, try again in a bit.");
+      }
+    }
+  }
+
+  private async runDraft(opp: Opportunity): Promise<void> {
+    if (!this.dossier || !this.dmChannel) return;
+    try {
+      const { applicationId, link } = await this.dossier.draft(opp);
+      this.sent[opp.id] = { status: "drafted", applicationId, link };
+      saveSent(this.sent);
+
+      const text = await this.dossier.read(applicationId);
+      const slug = opp.company.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "role";
+      const files = [
+        text.resume && new AttachmentBuilder(Buffer.from(text.resume, "utf8"), { name: `resume-${slug}.md` }),
+        text.coverLetter && new AttachmentBuilder(Buffer.from(text.coverLetter, "utf8"), { name: `cover-letter-${slug}.md` }),
+      ].filter((f): f is AttachmentBuilder => Boolean(f));
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId(`applied:${opp.id}`).setLabel("I applied").setStyle(ButtonStyle.Success),
+      );
+      await this.dmChannel.send({
+        content: `draft ready for **${opp.company} — ${opp.title}**\nopen it in dossier to pick a theme and download the PDF: ${link}\nthe apply page: ${opp.url}`,
+        files,
+        components: [row],
+      });
+    } catch (err) {
+      delete this.sent[opp.id];
+      saveSent(this.sent);
+      console.error(`Dossier draft failed for ${opp.company}: ${(err as Error).message}`);
+      await this.dmChannel.send(`dossier couldn't draft ${opp.company} — ${opp.title}: ${(err as Error).message.slice(0, 300)}`);
+    }
   }
 
   async postSummary(text: string): Promise<void> {
