@@ -63,11 +63,10 @@ async function scanOnce(bot: DiscordBot, cfg: ReturnType<typeof loadConfig>, pro
 
 async function main(): Promise<void> {
   const cfg = loadConfig();
-  const profile = loadProfile();
-  if (!profile) console.warn("No config/profile.md found — AI scoring and chat will have no candidate context.");
+  if (!loadProfile()) console.warn("No config/profile.md found — drops will post unscored and chat has no candidate context.");
 
   const llm = new Llm(cfg.ollamaUrl, cfg.ollamaModel);
-  const bot = new DiscordBot(cfg.discordToken, cfg.discordChannelId, cfg.discordUserId, llm, profile);
+  const bot = new DiscordBot(cfg.discordToken, cfg.discordChannelId, cfg.discordUserId, llm);
   await bot.start();
 
   const intervalMs = cfg.scanIntervalMinutes * 60_000;
@@ -76,7 +75,7 @@ async function main(): Promise<void> {
     if (running) return console.log("Scan still running, skipping tick.");
     running = true;
     try {
-      await scanOnce(bot, cfg, profile, llm);
+      await scanOnce(bot, cfg, loadProfile(), llm);
     } catch (err) {
       console.error(`Scan tick failed: ${(err as Error).message}`); // never kill the daemon
     } finally {

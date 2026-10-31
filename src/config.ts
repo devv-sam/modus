@@ -37,11 +37,12 @@ export function loadConfig(): Config {
   };
 }
 
+export const PROFILE_PATH = resolve(here, "..", "config", "profile.md");
+
 /** Load profile markdown from config/profile.md. Returns empty string if not found. */
 export function loadProfile(): string {
-  const path = resolve(dirname(fileURLToPath(import.meta.url)), "..", "config", "profile.md");
   try {
-    return readFileSync(path, "utf8");
+    return readFileSync(PROFILE_PATH, "utf8");
   } catch {
     return "";
   }

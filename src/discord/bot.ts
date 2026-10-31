@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import type { Opportunity } from "../types.js";
 import { respond } from "../ai/respond.js";
 import type { Llm } from "../ai/llm.js";
-import { Onboarding, PROFILE_PATH } from "./onboarding.js";
+import { loadProfile, PROFILE_PATH } from "../config.js";
 
 const DATA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "data");
 const RECENT_PATH = resolve(DATA_DIR, "recent.json");
@@ -27,17 +27,13 @@ export class DiscordBot {
   private dmChannel: DMChannel | null = null;
   // keyed by opp id so DM triage can resolve the full record; persisted across restarts
   private readonly posted = new Map<string, Opportunity>();
-  private profile: string;
-  private onboarding: Onboarding | null = null;
 
   constructor(
     private readonly token: string,
     private readonly channelId: string,
     private readonly userId: string,
     private readonly llm: Llm,
-    profile: string,
   ) {
-    this.profile = profile;
     this.loadRecent();
     this.client = new Client({
       intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
@@ -79,11 +75,6 @@ export class DiscordBot {
     this.dmChannel = await user.createDM();
 
     console.log(`Discord bot ready as ${this.client.user?.tag}. Loaded ${this.posted.size} recent drops from disk.`);
-
-    if (!this.profile) {
-      this.onboarding = new Onboarding();
-      await this.dmChannel.send(this.onboarding.intro());
-    }
   }
 
   async postOpportunity(opp: Opportunity): Promise<void> {
@@ -117,22 +108,11 @@ export class DiscordBot {
     if (message.channel.type !== ChannelType.DM) return;
     if (message.author.id !== this.userId) return;
 
-    if (this.onboarding?.active) {
-      const { reply, done } = this.onboarding.next(message.content);
-      await message.channel.send(reply);
-      if (done) {
-        this.profile = existsSync(PROFILE_PATH) ? readFileSync(PROFILE_PATH, "utf8") : "";
-        this.onboarding = null;
-      }
-      return;
-    }
-
     try {
-      const result = await respond(message.content, this.posted, this.profile, this.llm);
+      const result = await respond(message.content, this.posted, loadProfile(), this.llm);
       await message.channel.send(result.reply.slice(0, 2000));
       if (result.profileUpdate) {
         appendFileSync(PROFILE_PATH, `\n## preference update (${new Date().toISOString().slice(0, 10)})\n${result.profileUpdate}\n`);
-        this.profile = readFileSync(PROFILE_PATH, "utf8");
         console.log("Profile updated from chat.");
       }
     } catch (err) {
