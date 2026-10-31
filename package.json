@@ -1,7 +1,7 @@
 {
   "name": "modus",
   "version": "0.1.0",
-  "description": "Watches internship and hackathon sources and posts new drops to a private Discord channel with Apply / Skip / More buttons. Runs as a persistent bot on your own VPS. Open source, self-hosted.",
+  "description": "Watches internship feeds, scores new roles against your profile with a local model, and posts the good ones to Discord with a button to draft an application in Dossier. Runs on your own machine.",
   "type": "module",
   "license": "MIT",
   "engines": {
