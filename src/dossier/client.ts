@@ -48,16 +48,15 @@ export class Dossier {
   }
 
   async draft(opp: Opportunity): Promise<DraftResult> {
-    const note = `Found by modus via ${opp.source}.`;
     let started: { draft_id: string };
     try {
-      started = await this.call("draft_application", { posting_url: opp.url, note });
+      started = await this.call("draft_application", { posting_url: opp.url });
     } catch {
       // Dossier could not fetch the page, so give it what modus has
       const text = [`${opp.title} at ${opp.company}`, opp.location ? `Location: ${opp.location}` : "", `Posting: ${opp.url}`]
         .filter(Boolean)
         .join("\n");
-      started = await this.call("draft_application", { posting_text: text, note });
+      started = await this.call("draft_application", { posting_text: text });
     }
 
     const deadline = Date.now() + DRAFT_TIMEOUT_MS;
