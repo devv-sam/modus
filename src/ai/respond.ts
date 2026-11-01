@@ -3,7 +3,6 @@ import type { Opportunity } from "../types.js";
 
 export interface RespondResult {
   reply: string;
-  profileUpdate?: string; // set when the user gave new preferences to persist
 }
 
 export async function respond(
@@ -26,10 +25,13 @@ ${profile || "(no profile yet)"}
 ${dropsList || "none posted yet"}
 
 ## how to interpret messages
-- If the user is telling you their preferences, criteria, or corrections (e.g. "only send me X", "filter out Y", "I'm class of 2029", "my stack is...") → treat it as a profile update, not a request to vet specific items. Update the profile accordingly.
+- If the user states a preference, criterion, or correction (e.g. "only send me X", "filter out Y", "I'm class of 2029", "my stack is...") → you cannot act on it. Say so plainly, e.g. "i can't change that from here. edit config/profile.md on the laptop and it takes effect on the next scan."
 - If the user is asking about a specific role or asking you to evaluate something → do that.
 - If the user asks what you've posted or what's relevant → summarize from the feed above.
 - General questions → answer directly.
+
+## what you cannot do
+You can only reply with text. You cannot change the profile, the filters, the scoring, or what gets posted, and you cannot send anything to Dossier. Never say you updated, saved, changed, or will do any of those things.
 
 ## important: what you can and cannot see
 You only have the role title, company, and location from the feed — NOT the full job description. You cannot see class year requirements or comp details unless they appear in the title. Say so when relevant instead of guessing.
@@ -37,18 +39,15 @@ You only have the role title, company, and location from the feed — NOT the fu
 ## response format
 Respond ONLY with valid JSON — no text outside it:
 {
-  "reply": "<your response, markdown ok, be concise>",
-  "profileUpdate": "<only if the user gave new preferences to remember — write a concise summary of what changed to append to their profile. omit this field entirely if no profile update.>"
+  "reply": "<your response, markdown ok, be concise>"
 }`;
 
   return llm.json(
     system,
     userMessage,
     (v) => {
-      const o = v as { reply?: unknown; profileUpdate?: unknown } | null;
-      if (typeof o?.reply !== "string" || !o.reply.trim()) return null;
-      const update = typeof o.profileUpdate === "string" ? o.profileUpdate.trim() : "";
-      return { reply: o.reply.trim(), profileUpdate: update || undefined };
+      const o = v as { reply?: unknown } | null;
+      return typeof o?.reply === "string" && o.reply.trim() ? { reply: o.reply.trim() } : null;
     },
     700,
     history,

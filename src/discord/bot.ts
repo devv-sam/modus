@@ -14,13 +14,13 @@ import {
   type Message,
   type ButtonInteraction,
 } from "discord.js";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Opportunity } from "../types.js";
 import { respond } from "../ai/respond.js";
 import type { Llm } from "../ai/llm.js";
-import { loadProfile, PROFILE_PATH } from "../config.js";
+import { loadProfile } from "../config.js";
 import type { Dossier } from "../dossier/client.js";
 import { loadSent, saveSent } from "../dossier/sent.js";
 import { loadChat, recent, remember } from "./history.js";
@@ -229,10 +229,6 @@ export class DiscordBot {
       const result = await respond(message.content, this.posted, loadProfile(), this.llm, recent(this.chat));
       await message.channel.send(result.reply.slice(0, 2000));
       this.chat = remember(this.chat, message.content, result.reply);
-      if (result.profileUpdate) {
-        appendFileSync(PROFILE_PATH, `\n## preference update (${new Date().toISOString().slice(0, 10)})\n${result.profileUpdate}\n`);
-        console.log("Profile updated from chat.");
-      }
     } catch (err) {
       console.error(`DM handler failed: ${(err as Error).message}`);
       await message.channel.send("something went wrong on my end, try again.");
