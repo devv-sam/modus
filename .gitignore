@@ -12,3 +12,4 @@ logs/
 data/dossier-auth.json
 data/dossier-sent.json
 data/recent.json
+data/chat.json

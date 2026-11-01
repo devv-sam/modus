@@ -1,4 +1,4 @@
-import type { Llm } from "./llm.js";
+import type { ChatTurn, Llm } from "./llm.js";
 import type { Opportunity } from "../types.js";
 
 export interface RespondResult {
@@ -11,6 +11,7 @@ export async function respond(
   recentDrops: Map<string, Opportunity>,
   profile: string,
   llm: Llm,
+  history: ChatTurn[] = [],
 ): Promise<RespondResult> {
   const dropsList = [...recentDrops.values()]
     .map((o, i) => `${i + 1}. ${o.company} — ${o.title}${o.location ? ` (${o.location})` : ""}\n   ${o.url}`)
@@ -50,5 +51,6 @@ Respond ONLY with valid JSON — no text outside it:
       return { reply: o.reply.trim(), profileUpdate: update || undefined };
     },
     700,
+    history,
   );
 }

@@ -3,6 +3,12 @@ import type { ChatCompletionMessageParam } from "openai/resources/chat/completio
 
 export type Validator<T> = (value: unknown) => T | null;
 
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+  at: number;
+}
+
 function parseJson(raw: string): unknown {
   const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
   try {
@@ -29,9 +35,10 @@ export class Llm {
   }
 
   /** Single-shot JSON completion. Retries once if the output fails validation. */
-  async json<T>(system: string, user: string, validate: Validator<T>, maxTokens = 300): Promise<T> {
+  async json<T>(system: string, user: string, validate: Validator<T>, maxTokens = 300, history: ChatTurn[] = []): Promise<T> {
     const messages: ChatCompletionMessageParam[] = [
       { role: "system", content: system },
+      ...history.map(({ role, content }) => ({ role, content })),
       { role: "user", content: user },
     ];
     for (let attempt = 0; ; attempt++) {
