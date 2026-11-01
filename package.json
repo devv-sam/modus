@@ -11,7 +11,8 @@
     "build": "tsc",
     "start": "node --env-file=.env dist/index.js",
     "dev": "tsc && node --env-file=.env dist/index.js",
-    "connect-dossier": "node --env-file=.env dist/dossier/connect.js"
+    "connect-dossier": "node --env-file=.env dist/dossier/connect.js",
+    "backfill": "node --env-file=.env dist/backfill.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
