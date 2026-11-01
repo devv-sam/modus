@@ -17,6 +17,13 @@ export interface ApplicationText {
   coverLetter: string;
 }
 
+/** Lever and Ashby link to the application form, which has no posting text; the posting is one level up. */
+export function postingPage(url: string): string {
+  return url
+    .replace(/^(https:\/\/jobs\.lever\.co\/[^/?#]+\/[^/?#]+)\/apply(?=[/?#]|$)/i, "$1")
+    .replace(/^(https:\/\/jobs\.ashbyhq\.com\/[^/?#]+\/[^/?#]+)\/application(?=[/?#]|$)/i, "$1");
+}
+
 export class Dossier {
   constructor(
     private readonly baseUrl: string,
@@ -50,8 +57,17 @@ export class Dossier {
   async draft(opp: Opportunity): Promise<DraftResult> {
     let started: { draft_id: string };
     try {
-      started = await this.call("draft_application", { posting_url: opp.url });
-    } catch {
+      try {
+        started = await this.call("draft_application", { posting_url: postingPage(opp.url) });
+      } catch (err) {
+        // a job site that times out once often answers the second time
+        if (!/couldn't be reached/.test((err as Error).message)) throw err;
+        await new Promise((r) => setTimeout(r, 3_000));
+        started = await this.call("draft_application", { posting_url: postingPage(opp.url) });
+      }
+    } catch (err) {
+      // a pasted link has nothing but the link, so say what went wrong instead
+      if (!opp.title) throw err;
       // Dossier could not fetch the page, so give it what modus has
       const text = [`${opp.title} at ${opp.company}`, opp.location ? `Location: ${opp.location}` : "", `Posting: ${opp.url}`]
         .filter(Boolean)
