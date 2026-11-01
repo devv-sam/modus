@@ -8,10 +8,9 @@ import { Dossier } from "./dossier/client.js";
 import { isConnected } from "./dossier/auth.js";
 import { Llm } from "./ai/llm.js";
 import { scoreOpportunity } from "./ai/scorer.js";
+import { announce, MAX_INDIVIDUAL_POSTS } from "./announce.js";
 import type { Opportunity } from "./types.js";
 
-// above this many good drops, the best get an embed each and the rest one summary
-const MAX_INDIVIDUAL_POSTS = 10;
 const MAX_SCORING_FAILURES = 3;
 
 async function scanOnce(bot: DiscordBot, cfg: ReturnType<typeof loadConfig>, profile: string, llm: Llm): Promise<void> {
@@ -63,15 +62,9 @@ async function scanOnce(bot: DiscordBot, cfg: ReturnType<typeof loadConfig>, pro
       }
       const skipped = fresh.length - toPost.length - unscored.size;
       if (skipped > 0) console.log(`Scored ${fresh.length - unscored.size}, filtered ${skipped} below fit ${cfg.scoreThreshold}.`);
-      toPost.sort((a, b) => (b.fit ?? 0) - (a.fit ?? 0));
     }
 
-    for (const opp of toPost.slice(0, MAX_INDIVIDUAL_POSTS)) await bot.postOpportunity(opp);
-    const rest = toPost.slice(MAX_INDIVIDUAL_POSTS);
-    if (rest.length > 0) {
-      const lines = rest.slice(0, 10).map((o) => `• ${o.company} — ${o.title} (fit ${o.fit ?? "?"}/5)\n  ${o.url}`).join("\n");
-      await bot.postSummary(`${rest.length} more good roles:\n${lines}${rest.length > 10 ? `\n…and ${rest.length - 10} more` : ""}`);
-    }
+    await announce(bot, toPost);
     if (toPost.length > 0) console.log(`Posted ${toPost.length} fresh drops.`);
   }
 
