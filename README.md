@@ -45,6 +45,7 @@ modus talks to Dossier through its MCP connector, so the resume layout is Dossie
 2. set `DOSSIER_URL` in `.env` (default `http://localhost:3000`).
 3. sign modus in once: `npm run connect-dossier`, open the address it prints, press Allow. the token is kept in `data/dossier-auth.json` and refreshes itself; signing in again is only needed after changing Dossier's password or secret.
 4. each drop now has a **Send to Dossier** button. the draft arrives in your dm with the PDFs and an **I applied** button that marks it Sent in Dossier. modus never applies for you.
+5. for a role modus didn't post, dm it the posting link (up to 3 at a time), alone or with words like "send this to dossier" or "draft this". dossier reads the page for the company and title. if the site needs a browser or a login, dossier can't read it and modus says so.
 
 to get an edit link in those dms from your phone, publish Dossier on a private [Tailscale](https://tailscale.com) address (`tailscale serve --bg 3000`) and set `DOSSIER_PUBLIC_URL` to it. without it, no link is sent.
 
