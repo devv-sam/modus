@@ -24,6 +24,7 @@ import { loadProfile } from "../config.js";
 import type { Dossier } from "../dossier/client.js";
 import { loadSent, saveSent } from "../dossier/sent.js";
 import { loadChat, recent, remember } from "./history.js";
+import { hostOf, linksToSend, pastedOpportunity } from "./links.js";
 
 const DATA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "data");
 const RECENT_PATH = resolve(DATA_DIR, "recent.json");
@@ -141,20 +142,11 @@ export class DiscordBot {
 
     if (action === "send") {
       const opp = this.posted.get(id);
-      const existing = this.sent[id];
-      if (existing) {
-        const where = existing.link ? ` ${existing.link}` : "";
-        await interaction.reply(existing.status === "drafting" ? "already drafting that one, i'll ping you." : `already in dossier.${where}`);
-        return;
-      }
-      if (!opp) {
+      if (!opp && !this.sent[id]) {
         await interaction.reply("i don't have that role anymore.");
         return;
       }
-      this.sent[id] = { status: "drafting" };
-      saveSent(this.sent);
-      await interaction.reply(`sending ${opp.company} to dossier. drafting takes a few minutes, i'll ping you when it's ready.`);
-      this.drafting = this.drafting.then(() => this.runDraft(opp));
+      await interaction.reply(this.startDraft(opp!));
     } else if (action === "applied") {
       const record = this.sent[id];
       if (!record?.applicationId) {
@@ -173,34 +165,45 @@ export class DiscordBot {
     }
   }
 
+  /** Queues a draft unless one exists, and says what to tell the user. Drafts run one at a time. */
+  private startDraft(opp: Opportunity): string {
+    const existing = this.sent[opp.id];
+    if (existing) {
+      if (existing.status === "drafting") return "already drafting that one, i'll ping you.";
+      const link = existing.applicationId ? this.dossier?.reachableLink(existing.applicationId) : null;
+      return `already in dossier.${link ? ` ${link}` : ""}`;
+    }
+    this.sent[opp.id] = { status: "drafting" };
+    saveSent(this.sent);
+    this.drafting = this.drafting.then(() => this.runDraft(opp));
+    return `sending ${opp.company || hostOf(opp.url)} to dossier. drafting takes a few minutes, i'll ping you when it's ready.`;
+  }
+
   private async runDraft(opp: Opportunity): Promise<void> {
     if (!this.dossier || !this.dmChannel) return;
+    const fallbackName = opp.company ? `${opp.company} — ${opp.title}` : hostOf(opp.url);
     try {
       const { applicationId, link } = await this.dossier.draft(opp);
       this.sent[opp.id] = { status: "drafted", applicationId, link };
       saveSent(this.sent);
 
-      const files = await this.documentFiles(applicationId, opp.company);
+      // a pasted link has no title until Dossier has read the page
+      const name = opp.company ? fallbackName : ((await this.dossier.read(applicationId).catch(() => null))?.title || fallbackName);
+      const files = await this.documentFiles(applicationId, opp.company || hostOf(opp.url));
       const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId(`applied:${opp.id}`).setLabel("I applied").setStyle(ButtonStyle.Success),
       );
       const remote = this.dossier.reachableLink(applicationId);
       await this.dmChannel.send({
-        content: [
-          `draft ready for **${opp.company} — ${opp.title}**`,
-          remote ? `edit it in dossier: ${remote}` : "",
-          `apply here: ${opp.url}`,
-        ]
-          .filter(Boolean)
-          .join("\n"),
+        content: [`draft ready for **${name}**`, remote ? `edit it in dossier: ${remote}` : "", `apply here: ${opp.url}`].filter(Boolean).join("\n"),
         files,
         components: [row],
       });
     } catch (err) {
       delete this.sent[opp.id];
       saveSent(this.sent);
-      console.error(`Dossier draft failed for ${opp.company}: ${(err as Error).message}`);
-      await this.dmChannel.send(`dossier couldn't draft ${opp.company} — ${opp.title}: ${(err as Error).message.slice(0, 300)}`);
+      console.error(`Dossier draft failed for ${fallbackName}: ${(err as Error).message}`);
+      await this.dmChannel.send(`dossier couldn't draft ${fallbackName}: ${(err as Error).message.slice(0, 300)}`);
     }
   }
 
@@ -229,6 +232,16 @@ export class DiscordBot {
     if (message.author.bot) return;
     if (message.channel.type !== ChannelType.DM) return;
     if (message.author.id !== this.userId) return;
+
+    const links = linksToSend(message.content);
+    if (links.length > 0) {
+      if (!this.dossier) {
+        await message.channel.send("dossier isn't connected. run `npm run connect-dossier` on the laptop.");
+        return;
+      }
+      for (const link of links) await message.channel.send(this.startDraft(pastedOpportunity(link)));
+      return;
+    }
 
     try {
       const result = await respond(message.content, this.posted, loadProfile(), this.llm, recent(this.chat));
