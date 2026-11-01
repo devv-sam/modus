@@ -95,6 +95,11 @@ export class DiscordBot {
     console.log(`Discord bot ready as ${this.client.user?.tag}. Loaded ${this.posted.size} recent drops from disk.`);
   }
 
+  /** Whether this role was already posted, so the chat and the buttons know it. */
+  knows(id: string): boolean {
+    return this.posted.has(id);
+  }
+
   async postOpportunity(opp: Opportunity): Promise<void> {
     if (!this.channel) throw new Error("Bot not started.");
     this.posted.set(opp.id, opp);
