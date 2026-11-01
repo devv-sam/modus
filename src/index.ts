@@ -10,8 +10,9 @@ import { Llm } from "./ai/llm.js";
 import { scoreOpportunity } from "./ai/scorer.js";
 import type { Opportunity } from "./types.js";
 
-// above this many fresh drops, send a summary instead of individual embeds
+// above this many good drops, the best get an embed each and the rest one summary
 const MAX_INDIVIDUAL_POSTS = 10;
+const MAX_SCORING_FAILURES = 3;
 
 async function scanOnce(bot: DiscordBot, cfg: ReturnType<typeof loadConfig>, profile: string, llm: Llm): Promise<void> {
   const scanned: Opportunity[] = [];
@@ -33,30 +34,44 @@ async function scanOnce(bot: DiscordBot, cfg: ReturnType<typeof loadConfig>, pro
     console.log("First run: seeded state, sent one confirmation.");
   } else if (fresh.length === 0) {
     console.log("No new drops.");
-  } else if (fresh.length > MAX_INDIVIDUAL_POSTS) {
+  } else if (!profile && fresh.length > MAX_INDIVIDUAL_POSTS) {
     const preview = fresh.slice(0, 5).map((o) => `• ${o.company} — ${o.title}`).join("\n");
-    await bot.postSummary(`${fresh.length} new roles just dropped:\n${preview}\n…DM me to dig in.`);
-    console.log(`Posted summary for ${fresh.length} fresh drops.`);
+    await bot.postSummary(`${fresh.length} new roles just dropped:\n${preview}`);
+    console.log(`No profile: posted a summary for ${fresh.length} fresh drops.`);
   } else {
-    // score against the profile if there is one, otherwise post all
     let toPost = fresh;
     if (profile) {
       toPost = [];
-      for (const opp of fresh) {
+      let failures = 0;
+      for (const [index, opp] of fresh.entries()) {
+        // a model that is down or hung would take the whole backlog with it
+        if (failures >= MAX_SCORING_FAILURES) {
+          for (const rest of fresh.slice(index)) unscored.add(rest.id);
+          console.error(`Scoring stopped after ${failures} failures; ${fresh.length - index} roles will be retried next scan.`);
+          break;
+        }
         try {
           const { fit, reason, deadline } = await scoreOpportunity(opp, profile, llm);
+          failures = 0;
           if (fit >= cfg.scoreThreshold) toPost.push({ ...opp, fit, reason, deadline });
         } catch (err) {
-          // leave it out of the seen set so the next tick retries
+          // leave it out of the seen set so the next scan retries
+          failures++;
           unscored.add(opp.id);
           console.error(`Scoring failed for ${opp.company} — ${opp.title}: ${(err as Error).message}`);
         }
       }
       const skipped = fresh.length - toPost.length - unscored.size;
-      if (skipped > 0) console.log(`Filtered ${skipped} drops below fit ${cfg.scoreThreshold}.`);
+      if (skipped > 0) console.log(`Scored ${fresh.length - unscored.size}, filtered ${skipped} below fit ${cfg.scoreThreshold}.`);
+      toPost.sort((a, b) => (b.fit ?? 0) - (a.fit ?? 0));
     }
 
-    for (const opp of toPost) await bot.postOpportunity(opp);
+    for (const opp of toPost.slice(0, MAX_INDIVIDUAL_POSTS)) await bot.postOpportunity(opp);
+    const rest = toPost.slice(MAX_INDIVIDUAL_POSTS);
+    if (rest.length > 0) {
+      const lines = rest.slice(0, 10).map((o) => `• ${o.company} — ${o.title} (fit ${o.fit ?? "?"}/5)\n  ${o.url}`).join("\n");
+      await bot.postSummary(`${rest.length} more good roles:\n${lines}${rest.length > 10 ? `\n…and ${rest.length - 10} more` : ""}`);
+    }
     if (toPost.length > 0) console.log(`Posted ${toPost.length} fresh drops.`);
   }
 
