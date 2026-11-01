@@ -23,6 +23,7 @@ import type { Llm } from "../ai/llm.js";
 import { loadProfile, PROFILE_PATH } from "../config.js";
 import type { Dossier } from "../dossier/client.js";
 import { loadSent, saveSent } from "../dossier/sent.js";
+import { loadChat, recent, remember } from "./history.js";
 
 const DATA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "data");
 const RECENT_PATH = resolve(DATA_DIR, "recent.json");
@@ -35,6 +36,7 @@ export class DiscordBot {
   // keyed by opp id so DM triage can resolve the full record; persisted across restarts
   private readonly posted = new Map<string, Opportunity>();
   private readonly sent = loadSent();
+  private chat = loadChat();
   // one draft at a time: the local model is the bottleneck
   private drafting: Promise<void> = Promise.resolve();
 
@@ -224,8 +226,9 @@ export class DiscordBot {
     if (message.author.id !== this.userId) return;
 
     try {
-      const result = await respond(message.content, this.posted, loadProfile(), this.llm);
+      const result = await respond(message.content, this.posted, loadProfile(), this.llm, recent(this.chat));
       await message.channel.send(result.reply.slice(0, 2000));
+      this.chat = remember(this.chat, message.content, result.reply);
       if (result.profileUpdate) {
         appendFileSync(PROFILE_PATH, `\n## preference update (${new Date().toISOString().slice(0, 10)})\n${result.profileUpdate}\n`);
         console.log("Profile updated from chat.");
